@@ -1705,7 +1705,7 @@
           svg.append(createSvgElement("path", {
             class: "chart-line",
             d: pathData,
-            style: `stroke: ${cycleStyle.color}; stroke-width: ${cycleStyle.role === "Active" ? 3.5 : 2.75}px; opacity: ${cycleStyle.role === "Old" ? 0.9 : 1}`
+            style: `stroke: ${cycleStyle.color}; stroke-width: ${cycleStyle.role === "Active" ? 3.5 : 2.75}px; opacity: ${cycleStyle.role === "Old" ? 0.5 : 1}`
           }));
         });
 
@@ -1718,7 +1718,7 @@
               cx: x(item),
               cy: y(item[valueKey]),
               r: cycleStyle.role === "Active" ? 4 : 3.5,
-              style: `stroke: ${cycleStyle.color}`
+              style: `stroke: ${cycleStyle.color}; opacity: ${cycleStyle.role === "Old" ? 0.5 : 1}`
             });
             const note = getHistoryNote(item);
             const pointDescription = item.inferred
