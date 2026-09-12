@@ -1505,7 +1505,7 @@
       const RESET_WINDOW_MS = 7 * DAY_MS;
       const LINEAR_DAILY_RATE = 100 / 7;
       const ACTIVE_CYCLE_COLOR = "#6aaed6";
-      const OLD_CYCLE_COLOR = "#9fa9a6";
+      const OLD_CYCLE_COLOR = "#cfd4d3";
 
       function getHistoryNote(item) {
         return typeof item.note === "string" ? item.note.trim().slice(0, 500) : "";
@@ -1718,7 +1718,7 @@
               cx: x(item),
               cy: y(item[valueKey]),
               r: cycleStyle.role === "Active" ? 4 : 3.5,
-              style: `stroke: ${cycleStyle.color}; opacity: ${cycleStyle.role === "Old" ? 0.5 : 1}`
+              style: `stroke: ${cycleStyle.color}; fill: ${cycleStyle.role === "Old" ? "#ffffff" : "var(--surface-strong)"}`
             });
             const note = getHistoryNote(item);
             const pointDescription = item.inferred
