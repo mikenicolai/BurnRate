@@ -1504,6 +1504,7 @@
 
       const RESET_WINDOW_MS = 7 * DAY_MS;
       const LINEAR_DAILY_RATE = 100 / 7;
+      const Y_GRID_DIVISIONS = 10;
       const ACTIVE_CYCLE_COLOR = "#6aaed6";
       const OLD_CYCLE_COLOR = "#cfd4d3";
 
@@ -1593,8 +1594,8 @@
           })
         );
 
-        for (let index = 0; index <= 4; index += 1) {
-          const value = (maximumValue / 4) * index;
+        for (let index = 0; index <= Y_GRID_DIVISIONS; index += 1) {
+          const value = (maximumValue / Y_GRID_DIVISIONS) * index;
           const tickY = y(value);
           svg.append(
             createSvgElement("line", {
