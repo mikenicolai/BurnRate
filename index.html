@@ -1080,7 +1080,7 @@
         </div>
         <p class="chart-summary" id="chartSummary"></p>
       </div>
-      <p class="chart-explanation">The active cycle and old cycles share the same final-seven-day timeline, with reset day fixed at the right edge.</p>
+      <p class="chart-explanation">The active cycle and old cycles share the same final-seven-day timeline, with reset day fixed at the right edge. A missing cycle start is shown as an inferred 100% seven days before reset.</p>
       <div class="chart-legend" id="chartLegend" aria-label="Reset cycle legend"></div>
       <p class="chart-empty" id="chartEmpty">Save at least one calculation to begin charting your history.</p>
       <div class="chart-grid" id="chartGrid" hidden>
@@ -1505,7 +1505,7 @@
       const RESET_WINDOW_MS = 7 * DAY_MS;
       const LINEAR_DAILY_RATE = 100 / 7;
       const ACTIVE_CYCLE_COLOR = "#6aaed6";
-      const OLD_CYCLE_COLOR = "#c7ccca";
+      const OLD_CYCLE_COLOR = "#9fa9a6";
 
       function getHistoryNote(item) {
         return typeof item.note === "string" ? item.note.trim().slice(0, 500) : "";
@@ -1518,6 +1518,31 @@
           color: index === 0 ? ACTIVE_CYCLE_COLOR : OLD_CYCLE_COLOR,
           layer: index === 0 ? 1 : 0
         }]));
+      }
+
+      function addInferredCycleStarts(records, resetCycles) {
+        const augmentedRecords = [...records];
+        resetCycles.forEach((resetMs) => {
+          const cycleStartMs = resetMs - RESET_WINDOW_MS;
+          const hasRecordedStart = records.some((item) =>
+            item.resetMs === resetMs && item.calculatedAtMs === cycleStartMs
+          );
+          if (!hasRecordedStart) {
+            augmentedRecords.push({
+              id: `inferred-${resetMs}`,
+              calculatedAtMs: cycleStartMs,
+              resetMs,
+              remaining: 100,
+              used: 0,
+              remainingMs: RESET_WINDOW_MS,
+              perDay: LINEAR_DAILY_RATE,
+              perHour: LINEAR_DAILY_RATE / 24,
+              note: "",
+              inferred: true
+            });
+          }
+        });
+        return augmentedRecords.sort((left, right) => left.calculatedAtMs - right.calculatedAtMs);
       }
 
       function formatChartDay(milliseconds) {
@@ -1680,7 +1705,7 @@
           svg.append(createSvgElement("path", {
             class: "chart-line",
             d: pathData,
-            style: `stroke: ${cycleStyle.color}; stroke-width: ${cycleStyle.role === "Active" ? 3.5 : 2.5}px; opacity: ${cycleStyle.role === "Old" ? 0.58 : 1}`
+            style: `stroke: ${cycleStyle.color}; stroke-width: ${cycleStyle.role === "Active" ? 3.5 : 2.75}px; opacity: ${cycleStyle.role === "Old" ? 0.9 : 1}`
           }));
         });
 
@@ -1696,7 +1721,10 @@
               style: `stroke: ${cycleStyle.color}`
             });
             const note = getHistoryNote(item);
-            point.append(createSvgElement("title", {}, `${cycleStyle.role} cycle · ${formatNumber(daysBeforeReset, 2)} days before ${formatLocalDate(item.resetMs)}: ${formatRate(item[valueKey])} ${unit}${note ? ` — ${note}` : ""}`));
+            const pointDescription = item.inferred
+              ? `${cycleStyle.role} cycle · inferred start seven days before ${formatLocalDate(item.resetMs)}: ${formatRate(item[valueKey])} ${unit}`
+              : `${cycleStyle.role} cycle · ${formatNumber(daysBeforeReset, 2)} days before ${formatLocalDate(item.resetMs)}: ${formatRate(item[valueKey])} ${unit}${note ? ` — ${note}` : ""}`;
+            point.append(createSvgElement("title", {}, pointDescription));
             svg.append(point);
           });
         });
@@ -1725,8 +1753,9 @@
           .filter((item) => item.calculatedAtMs <= item.resetMs && item.calculatedAtMs >= item.resetMs - RESET_WINDOW_MS)
           .sort((left, right) => left.calculatedAtMs - right.calculatedAtMs);
         const resetCycles = [...new Set(history.map((item) => item.resetMs))];
+        const chartRecords = addInferredCycleStarts(records, resetCycles);
         const cycleStyles = buildCycleStyles(resetCycles);
-        const hasChartRecords = records.length > 0;
+        const hasChartRecords = chartRecords.length > 0;
         chartEmpty.hidden = hasChartRecords;
         chartGrid.hidden = !hasChartRecords;
         chartLegend.hidden = !hasChartRecords;
@@ -1763,8 +1792,8 @@
           ppdChart.replaceChildren();
           return;
         }
-        drawHistoryChart(remainingChart, records, "remaining", "% remaining", 100, cycleStyles);
-        drawHistoryChart(ppdChart, records, "perDay", "PPD", undefined, cycleStyles);
+        drawHistoryChart(remainingChart, chartRecords, "remaining", "% remaining", 100, cycleStyles);
+        drawHistoryChart(ppdChart, chartRecords, "perDay", "PPD", undefined, cycleStyles);
       }
 
       function makeCell(text, className = "") {
