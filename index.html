@@ -1700,18 +1700,19 @@
         });
         orderedGroups.forEach(([resetMs, group]) => {
           group.sort((left, right) => left.calculatedAtMs - right.calculatedAtMs);
-          if (group.length < 2) return;
-          const pathData = group.map((item, index) => `${index === 0 ? "M" : "L"} ${x(item)} ${y(item[valueKey])}`).join(" ");
           const cycleStyle = cycleStyles.get(resetMs);
-          svg.append(createSvgElement("path", {
-            class: "chart-line",
-            d: pathData,
-            style: `stroke: ${cycleStyle.color}; stroke-width: ${cycleStyle.role === "Active" ? 3.5 : 2.75}px; opacity: ${cycleStyle.role === "Old" ? 0.5 : 1}`
-          }));
-        });
-
-        orderedGroups.forEach(([resetMs, group]) => {
-          const cycleStyle = cycleStyles.get(resetMs);
+          const cycleLayer = createSvgElement("g", {
+            "data-cycle-role": cycleStyle.role,
+            "data-reset-ms": resetMs
+          });
+          if (group.length >= 2) {
+            const pathData = group.map((item, index) => `${index === 0 ? "M" : "L"} ${x(item)} ${y(item[valueKey])}`).join(" ");
+            cycleLayer.append(createSvgElement("path", {
+              class: "chart-line",
+              d: pathData,
+              style: `stroke: ${cycleStyle.color}; stroke-width: ${cycleStyle.role === "Active" ? 3.5 : 2.75}px; opacity: ${cycleStyle.role === "Old" ? 0.5 : 1}`
+            }));
+          }
           group.forEach((item) => {
             const daysBeforeReset = (item.resetMs - item.calculatedAtMs) / DAY_MS;
             const point = createSvgElement("circle", {
@@ -1719,15 +1720,16 @@
               cx: x(item),
               cy: y(item[valueKey]),
               r: cycleStyle.role === "Active" ? 4 : 3.5,
-              style: `stroke: ${cycleStyle.color}; fill: ${cycleStyle.role === "Old" ? "#ffffff" : "var(--surface-strong)"}`
+              style: `stroke: ${cycleStyle.color}; fill: ${cycleStyle.role === "Old" ? "#ffffff" : "transparent"}`
             });
             const note = getHistoryNote(item);
             const pointDescription = item.inferred
               ? `${cycleStyle.role} cycle · inferred start seven days before ${formatLocalDate(item.resetMs)}: ${formatRate(item[valueKey])} ${unit}`
               : `${cycleStyle.role} cycle · ${formatNumber(daysBeforeReset, 2)} days before ${formatLocalDate(item.resetMs)}: ${formatRate(item[valueKey])} ${unit}${note ? ` — ${note}` : ""}`;
             point.append(createSvgElement("title", {}, pointDescription));
-            svg.append(point);
+            cycleLayer.append(point);
           });
+          svg.append(cycleLayer);
         });
 
         svg.append(
