@@ -1699,17 +1699,24 @@
           return layerDifference || leftReset - rightReset;
         });
         const oldCyclesLayer = createSvgElement("g", { "data-chart-layer": "old-cycles" });
-        const activeCycleLayer = createSvgElement("g", { "data-chart-layer": "active-cycle" });
+        const activeConnectionsLayer = createSvgElement("g", { "data-chart-layer": "active-connections" });
+        const activeMarkersLayer = createSvgElement("g", { "data-chart-layer": "active-markers" });
         orderedGroups.forEach(([resetMs, group]) => {
           group.sort((left, right) => left.calculatedAtMs - right.calculatedAtMs);
           const cycleStyle = cycleStyles.get(resetMs);
-          const cycleLayer = createSvgElement("g", {
+          const connectionLayer = createSvgElement("g", {
             "data-cycle-role": cycleStyle.role,
-            "data-reset-ms": resetMs
+            "data-reset-ms": resetMs,
+            "data-cycle-part": "connections"
+          });
+          const markerLayer = createSvgElement("g", {
+            "data-cycle-role": cycleStyle.role,
+            "data-reset-ms": resetMs,
+            "data-cycle-part": "markers"
           });
           if (group.length >= 2) {
             const pathData = group.map((item, index) => `${index === 0 ? "M" : "L"} ${x(item)} ${y(item[valueKey])}`).join(" ");
-            cycleLayer.append(createSvgElement("path", {
+            connectionLayer.append(createSvgElement("path", {
               class: "chart-line",
               d: pathData,
               style: `stroke: ${cycleStyle.color}; stroke-width: ${cycleStyle.role === "Active" ? 3.5 : 2.75}px; opacity: ${cycleStyle.role === "Old" ? 0.5 : 1}`
@@ -1722,19 +1729,23 @@
               cx: x(item),
               cy: y(item[valueKey]),
               r: cycleStyle.role === "Active" ? 4 : 3.5,
-              style: `stroke: ${cycleStyle.color}; fill: ${cycleStyle.role === "Old" ? "#ffffff" : "transparent"}`
+              style: `stroke: ${cycleStyle.color}; fill: ${cycleStyle.role === "Old" ? "#ffffff" : "var(--surface-strong)"}`
             });
             const note = getHistoryNote(item);
             const pointDescription = item.inferred
               ? `${cycleStyle.role} cycle · inferred start seven days before ${formatLocalDate(item.resetMs)}: ${formatRate(item[valueKey])} ${unit}`
               : `${cycleStyle.role} cycle · ${formatNumber(daysBeforeReset, 2)} days before ${formatLocalDate(item.resetMs)}: ${formatRate(item[valueKey])} ${unit}${note ? ` — ${note}` : ""}`;
             point.append(createSvgElement("title", {}, pointDescription));
-            cycleLayer.append(point);
+            markerLayer.append(point);
           });
-          const chartLayer = cycleStyle.role === "Active" ? activeCycleLayer : oldCyclesLayer;
-          chartLayer.append(cycleLayer);
+          if (cycleStyle.role === "Active") {
+            activeConnectionsLayer.append(connectionLayer);
+            activeMarkersLayer.append(markerLayer);
+          } else {
+            oldCyclesLayer.append(connectionLayer, markerLayer);
+          }
         });
-        svg.append(oldCyclesLayer, activeCycleLayer);
+        svg.append(oldCyclesLayer, activeConnectionsLayer, activeMarkersLayer);
 
         svg.append(
           createSvgElement("text", {
