@@ -1698,6 +1698,8 @@
           const layerDifference = cycleStyles.get(leftReset).layer - cycleStyles.get(rightReset).layer;
           return layerDifference || leftReset - rightReset;
         });
+        const oldCyclesLayer = createSvgElement("g", { "data-chart-layer": "old-cycles" });
+        const activeCycleLayer = createSvgElement("g", { "data-chart-layer": "active-cycle" });
         orderedGroups.forEach(([resetMs, group]) => {
           group.sort((left, right) => left.calculatedAtMs - right.calculatedAtMs);
           const cycleStyle = cycleStyles.get(resetMs);
@@ -1729,8 +1731,10 @@
             point.append(createSvgElement("title", {}, pointDescription));
             cycleLayer.append(point);
           });
-          svg.append(cycleLayer);
+          const chartLayer = cycleStyle.role === "Active" ? activeCycleLayer : oldCyclesLayer;
+          chartLayer.append(cycleLayer);
         });
+        svg.append(oldCyclesLayer, activeCycleLayer);
 
         svg.append(
           createSvgElement("text", {
