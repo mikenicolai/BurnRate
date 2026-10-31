@@ -550,12 +550,10 @@
     }
 
     .chart-legend-swatch.is-projection {
-      height: 2px;
+      height: 8px;
+      border-radius: 3px;
       background: #f3c4aa;
-    }
-
-    .chart-legend-swatch.is-fastest-projection {
-      background: repeating-linear-gradient(90deg, #f3c4aa 0 5px, transparent 5px 8px);
+      opacity: 0.45;
     }
 
     .chart-grid {
@@ -649,46 +647,22 @@
       stroke-width: 2;
     }
 
-    .history-chart .chart-projection-line {
-      fill: none;
-      stroke: #f3c4aa;
-      stroke-linecap: round;
-      stroke-width: 2;
-    }
-
-    .history-chart .chart-projection-line.is-fastest {
-      stroke-dasharray: 5 5;
-    }
-
     .history-chart .chart-projection-band {
       fill: #f3c4aa;
       fill-opacity: 0.22;
-      pointer-events: none;
+      pointer-events: all;
+      transition: fill-opacity 120ms ease;
     }
 
-    .history-chart .chart-projection-endpoint-group {
+    .history-chart .chart-projection-area {
       cursor: pointer;
       outline: none;
     }
 
-    .history-chart .chart-projection-endpoint {
-      fill: var(--surface-strong);
-      stroke: #e7a27a;
-      stroke-width: 2;
-    }
-
-    .history-chart .chart-projection-endpoint-hit {
-      fill: transparent;
-      pointer-events: all;
-    }
-
-    .history-chart .chart-projection-endpoint.is-fastest {
-      fill: #f9e1d3;
-    }
-
-    .history-chart .chart-projection-endpoint-group:focus .chart-projection-endpoint {
-      stroke: #c96f40;
-      stroke-width: 3;
+    .history-chart .chart-projection-area:hover .chart-projection-band,
+    .history-chart .chart-projection-area:focus .chart-projection-band,
+    .history-chart .chart-projection-area.is-open .chart-projection-band {
+      fill-opacity: 0.34;
     }
 
     .history-chart .chart-projection-tooltip {
@@ -697,9 +671,9 @@
       transition: opacity 120ms ease;
     }
 
-    .history-chart .chart-projection-endpoint-group:hover .chart-projection-tooltip,
-    .history-chart .chart-projection-endpoint-group:focus .chart-projection-tooltip,
-    .history-chart .chart-projection-endpoint-group.is-open .chart-projection-tooltip {
+    .history-chart .chart-projection-area:hover .chart-projection-tooltip,
+    .history-chart .chart-projection-area:focus .chart-projection-tooltip,
+    .history-chart .chart-projection-area.is-open .chart-projection-tooltip {
       opacity: 1;
     }
 
@@ -1168,7 +1142,7 @@
         </div>
         <p class="chart-summary" id="chartSummary"></p>
       </div>
-      <p class="chart-explanation">The active cycle and old cycles share the same final-seven-day timeline, with reset day fixed at the right edge. A missing cycle start is shown as an inferred 100% seven days before reset. Light-orange lines project the latest active point to 0% using its average and maximum observed burn rates.</p>
+      <p class="chart-explanation">The active cycle and old cycles share the same final-seven-day timeline, with reset day fixed at the right edge. A missing cycle start is shown as an inferred 100% seven days before reset. Hover the shaded orange projection range to see both estimated zero times.</p>
       <div class="chart-legend" id="chartLegend" aria-label="Reset cycle legend"></div>
       <p class="chart-empty" id="chartEmpty">Save at least one calculation to begin charting your history.</p>
       <div class="chart-grid" id="chartGrid" hidden>
@@ -1595,7 +1569,6 @@
       const Y_GRID_DIVISIONS = 10;
       const ACTIVE_CYCLE_COLOR = "#6aaed6";
       const OLD_CYCLE_COLOR = "#cfd4d3";
-      const PROJECTION_COLOR = "#f3c4aa";
 
       function getHistoryNote(item) {
         return typeof item.note === "string" ? item.note.trim().slice(0, 500) : "";
@@ -1687,6 +1660,16 @@
         return new Intl.DateTimeFormat(undefined, {
           day: "numeric",
           month: "short"
+        }).format(new Date(milliseconds));
+      }
+
+      function formatProjectionEstimate(milliseconds) {
+        return new Intl.DateTimeFormat(undefined, {
+          day: "numeric",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit"
         }).format(new Date(milliseconds));
       }
 
@@ -1896,91 +1879,75 @@
           const averageProjection = displayProjections.find((projection) => projection.kind === "average");
           const fastestProjection = displayProjections.find((projection) => projection.kind === "fastest");
           if (averageProjection && fastestProjection) {
-            projectionLayer.append(createSvgElement("polygon", {
+            const latestX = x(activeSlopeProjections.latest);
+            const latestY = y(activeSlopeProjections.latest.remaining);
+            const fastestX = x({ calculatedAtMs: fastestProjection.displayEndMs, resetMs: activeSlopeProjections.activeResetMs });
+            const fastestY = y(fastestProjection.displayEndRemaining);
+            const averageX = x({ calculatedAtMs: averageProjection.displayEndMs, resetMs: activeSlopeProjections.activeResetMs });
+            const averageY = y(averageProjection.displayEndRemaining);
+            const areaLabel = `Max rate ${formatNumber(fastestProjection.ratePerDay, 4)} PPD reaches 0% at ${formatLocalDateWithSeconds(fastestProjection.zeroAtMs)}. Average rate ${formatNumber(averageProjection.ratePerDay, 4)} PPD reaches 0% at ${formatLocalDateWithSeconds(averageProjection.zeroAtMs)}.`;
+            const projectionArea = createSvgElement("g", {
+              class: "chart-projection-area",
+              tabindex: 0,
+              role: "button",
+              "aria-label": areaLabel
+            });
+            const projectionBand = createSvgElement("polygon", {
               class: "chart-projection-band",
               points: [
-                `${x(activeSlopeProjections.latest)},${y(activeSlopeProjections.latest.remaining)}`,
-                `${x({ calculatedAtMs: fastestProjection.displayEndMs, resetMs: activeSlopeProjections.activeResetMs })},${y(fastestProjection.displayEndRemaining)}`,
-                `${x({ calculatedAtMs: averageProjection.displayEndMs, resetMs: activeSlopeProjections.activeResetMs })},${y(averageProjection.displayEndRemaining)}`
+                `${latestX},${latestY}`,
+                `${fastestX},${fastestY}`,
+                `${averageX},${averageY}`
               ].join(" ")
-            }));
-          }
-          displayProjections.forEach((projection) => {
-            const projectionLine = createSvgElement("line", {
-              class: `chart-projection-line${projection.kind === "fastest" ? " is-fastest" : ""}`,
-              x1: x(activeSlopeProjections.latest),
-              y1: y(activeSlopeProjections.latest.remaining),
-              x2: x({ calculatedAtMs: projection.displayEndMs, resetMs: activeSlopeProjections.activeResetMs }),
-              y2: y(projection.displayEndRemaining),
-              style: `stroke: ${PROJECTION_COLOR}`
             });
-            projectionLine.append(createSvgElement("title", {}, `${projection.label}: ${formatNumber(projection.ratePerDay, 4)} percentage points per day, reaching 0% at ${formatLocalDateWithSeconds(projection.zeroAtMs)}.`));
-            projectionLayer.append(projectionLine);
-            if (projection.zeroAtMs <= activeSlopeProjections.activeResetMs) {
-              const endpointLabel = `${projection.label} reaches 0% at ${formatLocalDateWithSeconds(projection.zeroAtMs)}`;
-              const endpointX = x({ calculatedAtMs: projection.zeroAtMs, resetMs: activeSlopeProjections.activeResetMs });
-              const endpointY = y(0);
-              const tooltipWidth = 218;
-              const tooltipHeight = 44;
-              const tooltipX = Math.max(margin.left + 4, Math.min(endpointX - tooltipWidth / 2, width - margin.right - tooltipWidth - 4));
-              const tooltipY = Math.max(margin.top + 4, endpointY - tooltipHeight - 13);
-              const endpointGroup = createSvgElement("g", {
-                class: "chart-projection-endpoint-group",
-                tabindex: 0,
-                role: "button",
-                "aria-label": endpointLabel
-              });
-              const endpoint = createSvgElement("circle", {
-                class: `chart-projection-endpoint${projection.kind === "fastest" ? " is-fastest" : ""}`,
-                cx: endpointX,
-                cy: endpointY,
-                r: 2.75
-              });
-              const endpointHit = createSvgElement("circle", {
-                class: "chart-projection-endpoint-hit",
-                cx: endpointX,
-                cy: endpointY,
-                r: 8
-              });
-              const tooltip = createSvgElement("g", {
-                class: "chart-projection-tooltip",
-                "aria-hidden": "true"
-              });
-              tooltip.append(
-                createSvgElement("rect", {
-                  class: "chart-projection-tooltip-box",
-                  x: tooltipX,
-                  y: tooltipY,
-                  width: tooltipWidth,
-                  height: tooltipHeight,
-                  rx: 7
-                }),
-                createSvgElement("text", {
-                  class: "chart-projection-tooltip-title",
-                  x: tooltipX + 10,
-                  y: tooltipY + 17
-                }, `${projection.label} zero estimate`),
-                createSvgElement("text", {
-                  class: "chart-projection-tooltip-time",
-                  x: tooltipX + 10,
-                  y: tooltipY + 34
-                }, formatLocalDateWithSeconds(projection.zeroAtMs))
-              );
-              endpointGroup.append(endpointHit, endpoint, tooltip);
-              endpointGroup.addEventListener("click", (event) => {
-                event.stopPropagation();
-                endpointGroup.classList.add("is-open");
-                endpointGroup.focus();
-              });
-              endpointGroup.addEventListener("keydown", (event) => {
-                if (event.key !== "Enter" && event.key !== " ") return;
-                event.preventDefault();
-                endpointGroup.classList.add("is-open");
-              });
-              endpointGroup.addEventListener("blur", () => endpointGroup.classList.remove("is-open"));
-              projectionLayer.append(endpointGroup);
-            }
-          });
+            const tooltipWidth = Math.min(266, plotWidth - 8);
+            const tooltipHeight = 64;
+            const areaCenterX = (latestX + fastestX + averageX) / 3;
+            const tooltipX = Math.max(margin.left + 4, Math.min(areaCenterX - tooltipWidth / 2, width - margin.right - tooltipWidth - 4));
+            const tooltipY = Math.max(margin.top + 4, latestY - tooltipHeight - 10);
+            const tooltip = createSvgElement("g", {
+              class: "chart-projection-tooltip",
+              "aria-hidden": "true"
+            });
+            tooltip.append(
+              createSvgElement("rect", {
+                class: "chart-projection-tooltip-box",
+                x: tooltipX,
+                y: tooltipY,
+                width: tooltipWidth,
+                height: tooltipHeight,
+                rx: 7
+              }),
+              createSvgElement("text", {
+                class: "chart-projection-tooltip-title",
+                x: tooltipX + 10,
+                y: tooltipY + 16
+              }, "Projected zero estimates"),
+              createSvgElement("text", {
+                class: "chart-projection-tooltip-time",
+                x: tooltipX + 10,
+                y: tooltipY + 35
+              }, `Max ${formatNumber(fastestProjection.ratePerDay, 4)} PPD · ${formatProjectionEstimate(fastestProjection.zeroAtMs)}`),
+              createSvgElement("text", {
+                class: "chart-projection-tooltip-time",
+                x: tooltipX + 10,
+                y: tooltipY + 53
+              }, `Average ${formatNumber(averageProjection.ratePerDay, 4)} PPD · ${formatProjectionEstimate(averageProjection.zeroAtMs)}`)
+            );
+            projectionArea.append(projectionBand, tooltip);
+            projectionArea.addEventListener("click", (event) => {
+              event.stopPropagation();
+              projectionArea.classList.add("is-open");
+              projectionArea.focus();
+            });
+            projectionArea.addEventListener("keydown", (event) => {
+              if (event.key !== "Enter" && event.key !== " ") return;
+              event.preventDefault();
+              projectionArea.classList.add("is-open");
+            });
+            projectionArea.addEventListener("blur", () => projectionArea.classList.remove("is-open"));
+            projectionLayer.append(projectionArea);
+          }
         }
         svg.append(oldCyclesLayer, activeConnectionsLayer, projectionLayer, activeMarkersLayer);
 
@@ -2044,14 +2011,12 @@
           chartLegend.append(item);
         }
         if (activeSlopeProjections) {
-          activeSlopeProjections.projections.forEach((projection) => {
-            const item = document.createElement("span");
-            item.className = "chart-legend-item";
-            const swatch = document.createElement("span");
-            swatch.className = `chart-legend-swatch is-projection${projection.kind === "fastest" ? " is-fastest-projection" : ""}`;
-            item.append(swatch, `${projection.label} · ${formatNumber(projection.ratePerDay, 4)} PPD · finishes ${formatLocalDateWithSeconds(projection.zeroAtMs)}`);
-            chartLegend.append(item);
-          });
+          const item = document.createElement("span");
+          item.className = "chart-legend-item";
+          const swatch = document.createElement("span");
+          swatch.className = "chart-legend-swatch is-projection";
+          item.append(swatch, "Projected zero range · hover for max and average estimates");
+          chartLegend.append(item);
         }
         if (!hasChartRecords) {
           remainingChart.replaceChildren();
