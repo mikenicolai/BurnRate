@@ -677,6 +677,11 @@
       stroke-width: 2;
     }
 
+    .history-chart .chart-projection-endpoint-hit {
+      fill: transparent;
+      pointer-events: all;
+    }
+
     .history-chart .chart-projection-endpoint.is-fastest {
       fill: #f9e1d3;
     }
@@ -1163,7 +1168,7 @@
         </div>
         <p class="chart-summary" id="chartSummary"></p>
       </div>
-      <p class="chart-explanation">The active cycle and old cycles share the same final-seven-day timeline, with reset day fixed at the right edge. A missing cycle start is shown as an inferred 100% seven days before reset. Light-orange lines project the latest active point to 0% using its average and fastest observed burn slopes.</p>
+      <p class="chart-explanation">The active cycle and old cycles share the same final-seven-day timeline, with reset day fixed at the right edge. A missing cycle start is shown as an inferred 100% seven days before reset. Light-orange lines project the latest active point to 0% using its average and maximum observed burn rates.</p>
       <div class="chart-legend" id="chartLegend" aria-label="Reset cycle legend"></div>
       <p class="chart-empty" id="chartEmpty">Save at least one calculation to begin charting your history.</p>
       <div class="chart-grid" id="chartGrid" hidden>
@@ -1672,8 +1677,8 @@
           };
         };
         const projections = [
-          makeProjection("average", "Average slope", averageRatePerMs),
-          makeProjection("fastest", "Fastest slope", fastestRatePerMs)
+          makeProjection("average", "Average rate", averageRatePerMs),
+          makeProjection("fastest", "Max rate", fastestRatePerMs)
         ].filter(Boolean);
         return projections.length ? { activeResetMs, latest, projections } : null;
       }
@@ -1929,7 +1934,13 @@
                 class: `chart-projection-endpoint${projection.kind === "fastest" ? " is-fastest" : ""}`,
                 cx: endpointX,
                 cy: endpointY,
-                r: 4.5
+                r: 2.75
+              });
+              const endpointHit = createSvgElement("circle", {
+                class: "chart-projection-endpoint-hit",
+                cx: endpointX,
+                cy: endpointY,
+                r: 8
               });
               const tooltip = createSvgElement("g", {
                 class: "chart-projection-tooltip",
@@ -1955,7 +1966,7 @@
                   y: tooltipY + 34
                 }, formatLocalDateWithSeconds(projection.zeroAtMs))
               );
-              endpointGroup.append(endpoint, tooltip);
+              endpointGroup.append(endpointHit, endpoint, tooltip);
               endpointGroup.addEventListener("click", (event) => {
                 event.stopPropagation();
                 endpointGroup.classList.add("is-open");
@@ -2038,7 +2049,7 @@
             item.className = "chart-legend-item";
             const swatch = document.createElement("span");
             swatch.className = `chart-legend-swatch is-projection${projection.kind === "fastest" ? " is-fastest-projection" : ""}`;
-            item.append(swatch, `${projection.label} · ${formatNumber(projection.ratePerDay, 4)} PPD`);
+            item.append(swatch, `${projection.label} · ${formatNumber(projection.ratePerDay, 4)} PPD · finishes ${formatLocalDateWithSeconds(projection.zeroAtMs)}`);
             chartLegend.append(item);
           });
         }
