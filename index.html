@@ -660,6 +660,29 @@
       stroke-dasharray: 5 5;
     }
 
+    .history-chart .chart-projection-band {
+      fill: #f3c4aa;
+      fill-opacity: 0.22;
+      pointer-events: none;
+    }
+
+    .history-chart .chart-projection-endpoint {
+      fill: var(--surface-strong);
+      stroke: #e7a27a;
+      stroke-width: 2;
+      cursor: help;
+    }
+
+    .history-chart .chart-projection-endpoint.is-fastest {
+      fill: #f9e1d3;
+    }
+
+    .history-chart .chart-projection-endpoint:focus-visible {
+      outline: none;
+      stroke: #c96f40;
+      stroke-width: 3;
+    }
+
     .history-chart.ppd-chart .chart-point {
       stroke: var(--warm);
     }
@@ -1819,20 +1842,49 @@
           }
         });
         if (activeSlopeProjections) {
-          activeSlopeProjections.projections.forEach((projection) => {
+          const displayProjections = activeSlopeProjections.projections.map((projection) => {
             const displayEndMs = Math.min(projection.zeroAtMs, activeSlopeProjections.activeResetMs);
             const displayEndRemaining = Math.max(0, activeSlopeProjections.latest.remaining
               - projection.ratePerMs * (displayEndMs - activeSlopeProjections.latest.calculatedAtMs));
+            return { ...projection, displayEndMs, displayEndRemaining };
+          });
+          const averageProjection = displayProjections.find((projection) => projection.kind === "average");
+          const fastestProjection = displayProjections.find((projection) => projection.kind === "fastest");
+          if (averageProjection && fastestProjection) {
+            projectionLayer.append(createSvgElement("polygon", {
+              class: "chart-projection-band",
+              points: [
+                `${x(activeSlopeProjections.latest)},${y(activeSlopeProjections.latest.remaining)}`,
+                `${x({ calculatedAtMs: fastestProjection.displayEndMs, resetMs: activeSlopeProjections.activeResetMs })},${y(fastestProjection.displayEndRemaining)}`,
+                `${x({ calculatedAtMs: averageProjection.displayEndMs, resetMs: activeSlopeProjections.activeResetMs })},${y(averageProjection.displayEndRemaining)}`
+              ].join(" ")
+            }));
+          }
+          displayProjections.forEach((projection) => {
             const projectionLine = createSvgElement("line", {
               class: `chart-projection-line${projection.kind === "fastest" ? " is-fastest" : ""}`,
               x1: x(activeSlopeProjections.latest),
               y1: y(activeSlopeProjections.latest.remaining),
-              x2: x({ calculatedAtMs: displayEndMs, resetMs: activeSlopeProjections.activeResetMs }),
-              y2: y(displayEndRemaining),
+              x2: x({ calculatedAtMs: projection.displayEndMs, resetMs: activeSlopeProjections.activeResetMs }),
+              y2: y(projection.displayEndRemaining),
               style: `stroke: ${PROJECTION_COLOR}`
             });
             projectionLine.append(createSvgElement("title", {}, `${projection.label}: ${formatNumber(projection.ratePerDay, 4)} percentage points per day, reaching 0% at ${formatLocalDateWithSeconds(projection.zeroAtMs)}.`));
             projectionLayer.append(projectionLine);
+            if (projection.zeroAtMs <= activeSlopeProjections.activeResetMs) {
+              const endpointLabel = `${projection.label} reaches 0% at ${formatLocalDateWithSeconds(projection.zeroAtMs)}`;
+              const endpoint = createSvgElement("circle", {
+                class: `chart-projection-endpoint${projection.kind === "fastest" ? " is-fastest" : ""}`,
+                cx: x({ calculatedAtMs: projection.zeroAtMs, resetMs: activeSlopeProjections.activeResetMs }),
+                cy: y(0),
+                r: 4.5,
+                tabindex: 0,
+                role: "img",
+                "aria-label": endpointLabel
+              });
+              endpoint.append(createSvgElement("title", {}, endpointLabel));
+              projectionLayer.append(endpoint);
+            }
           });
         }
         svg.append(oldCyclesLayer, activeConnectionsLayer, projectionLayer, activeMarkersLayer);
