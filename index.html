@@ -552,8 +552,8 @@
     .chart-legend-swatch.is-projection {
       height: 8px;
       border-radius: 3px;
-      background: #f3c4aa;
-      opacity: 0.45;
+      background: #ed985f;
+      opacity: 0.68;
     }
 
     .chart-grid {
@@ -648,10 +648,22 @@
     }
 
     .history-chart .chart-projection-band {
-      fill: #f3c4aa;
-      fill-opacity: 0.22;
+      fill: #ed985f;
+      fill-opacity: 0.36;
       pointer-events: all;
       transition: fill-opacity 120ms ease;
+    }
+
+    .history-chart .chart-projection-average-line {
+      stroke: #ed985f;
+      stroke-linecap: round;
+      stroke-width: 2;
+    }
+
+    .history-chart .chart-projection-average-hit {
+      stroke: transparent;
+      stroke-width: 14;
+      pointer-events: stroke;
     }
 
     .history-chart .chart-projection-area {
@@ -662,7 +674,7 @@
     .history-chart .chart-projection-area:hover .chart-projection-band,
     .history-chart .chart-projection-area:focus .chart-projection-band,
     .history-chart .chart-projection-area.is-open .chart-projection-band {
-      fill-opacity: 0.34;
+      fill-opacity: 0.5;
     }
 
     .history-chart .chart-projection-tooltip {
@@ -680,11 +692,12 @@
     .history-chart .chart-projection-tooltip-box {
       fill: #24312d;
       fill-opacity: 0.96;
-      stroke: #f3c4aa;
+      stroke: #ed985f;
       stroke-width: 1;
     }
 
     .history-chart .chart-projection-tooltip-title,
+    .history-chart .chart-projection-tooltip-label,
     .history-chart .chart-projection-tooltip-time {
       fill: #ffffff;
       font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -700,6 +713,11 @@
       fill: #f9e1d3;
       font-size: 10px;
       font-weight: 600;
+    }
+
+    .history-chart .chart-projection-tooltip-label {
+      font-size: 10px;
+      font-weight: 700;
     }
 
     .history-chart.ppd-chart .chart-point {
@@ -1142,7 +1160,7 @@
         </div>
         <p class="chart-summary" id="chartSummary"></p>
       </div>
-      <p class="chart-explanation">The active cycle and old cycles share the same final-seven-day timeline, with reset day fixed at the right edge. A missing cycle start is shown as an inferred 100% seven days before reset. Hover the shaded orange projection range to see both estimated zero times.</p>
+      <p class="chart-explanation">The active cycle and old cycles share the same final-seven-day timeline, with reset day fixed at the right edge. A missing cycle start is shown as an inferred 100% seven days before reset. Hover the shaded orange range or its average line to see both estimated zero times.</p>
       <div class="chart-legend" id="chartLegend" aria-label="Reset cycle legend"></div>
       <p class="chart-empty" id="chartEmpty">Save at least one calculation to begin charting your history.</p>
       <div class="chart-grid" id="chartGrid" hidden>
@@ -1900,7 +1918,21 @@
                 `${averageX},${averageY}`
               ].join(" ")
             });
-            const tooltipWidth = Math.min(266, plotWidth - 8);
+            const averageLineHit = createSvgElement("line", {
+              class: "chart-projection-average-hit",
+              x1: latestX,
+              y1: latestY,
+              x2: averageX,
+              y2: averageY
+            });
+            const averageLine = createSvgElement("line", {
+              class: "chart-projection-average-line",
+              x1: latestX,
+              y1: latestY,
+              x2: averageX,
+              y2: averageY
+            });
+            const tooltipWidth = Math.min(278, plotWidth - 8);
             const tooltipHeight = 64;
             const areaCenterX = (latestX + fastestX + averageX) / 3;
             const tooltipX = Math.max(margin.left + 4, Math.min(areaCenterX - tooltipWidth / 2, width - margin.right - tooltipWidth - 4));
@@ -1924,17 +1956,29 @@
                 y: tooltipY + 16
               }, "Projected zero estimates"),
               createSvgElement("text", {
-                class: "chart-projection-tooltip-time",
+                class: "chart-projection-tooltip-label",
                 x: tooltipX + 10,
                 y: tooltipY + 35
-              }, `Max ${formatNumber(fastestProjection.ratePerDay, 4)} PPD · ${formatProjectionEstimate(fastestProjection.zeroAtMs)}`),
+              }, `Max · ${formatNumber(fastestProjection.ratePerDay, 4)} PPD`),
               createSvgElement("text", {
                 class: "chart-projection-tooltip-time",
+                x: tooltipX + tooltipWidth - 10,
+                y: tooltipY + 35,
+                "text-anchor": "end"
+              }, formatProjectionEstimate(fastestProjection.zeroAtMs)),
+              createSvgElement("text", {
+                class: "chart-projection-tooltip-label",
                 x: tooltipX + 10,
                 y: tooltipY + 53
-              }, `Average ${formatNumber(averageProjection.ratePerDay, 4)} PPD · ${formatProjectionEstimate(averageProjection.zeroAtMs)}`)
+              }, `Average · ${formatNumber(averageProjection.ratePerDay, 4)} PPD`),
+              createSvgElement("text", {
+                class: "chart-projection-tooltip-time",
+                x: tooltipX + tooltipWidth - 10,
+                y: tooltipY + 53,
+                "text-anchor": "end"
+              }, formatProjectionEstimate(averageProjection.zeroAtMs))
             );
-            projectionArea.append(projectionBand, tooltip);
+            projectionArea.append(projectionBand, averageLineHit, averageLine, tooltip);
             projectionArea.addEventListener("click", (event) => {
               event.stopPropagation();
               projectionArea.classList.add("is-open");
