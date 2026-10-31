@@ -549,6 +549,15 @@
       background: var(--cycle-color);
     }
 
+    .chart-legend-swatch.is-projection {
+      height: 2px;
+      background: #f3c4aa;
+    }
+
+    .chart-legend-swatch.is-fastest-projection {
+      background: repeating-linear-gradient(90deg, #f3c4aa 0 5px, transparent 5px 8px);
+    }
+
     .chart-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -638,6 +647,17 @@
       fill: var(--surface-strong);
       stroke: var(--accent);
       stroke-width: 2;
+    }
+
+    .history-chart .chart-projection-line {
+      fill: none;
+      stroke: #f3c4aa;
+      stroke-linecap: round;
+      stroke-width: 2;
+    }
+
+    .history-chart .chart-projection-line.is-fastest {
+      stroke-dasharray: 5 5;
     }
 
     .history-chart.ppd-chart .chart-point {
@@ -1080,7 +1100,7 @@
         </div>
         <p class="chart-summary" id="chartSummary"></p>
       </div>
-      <p class="chart-explanation">The active cycle and old cycles share the same final-seven-day timeline, with reset day fixed at the right edge. A missing cycle start is shown as an inferred 100% seven days before reset.</p>
+      <p class="chart-explanation">The active cycle and old cycles share the same final-seven-day timeline, with reset day fixed at the right edge. A missing cycle start is shown as an inferred 100% seven days before reset. Light-orange lines project the latest active point to 0% using its average and fastest observed burn slopes.</p>
       <div class="chart-legend" id="chartLegend" aria-label="Reset cycle legend"></div>
       <p class="chart-empty" id="chartEmpty">Save at least one calculation to begin charting your history.</p>
       <div class="chart-grid" id="chartGrid" hidden>
@@ -1507,6 +1527,7 @@
       const Y_GRID_DIVISIONS = 10;
       const ACTIVE_CYCLE_COLOR = "#6aaed6";
       const OLD_CYCLE_COLOR = "#cfd4d3";
+      const PROJECTION_COLOR = "#f3c4aa";
 
       function getHistoryNote(item) {
         return typeof item.note === "string" ? item.note.trim().slice(0, 500) : "";
@@ -1546,6 +1567,54 @@
         return augmentedRecords.sort((left, right) => left.calculatedAtMs - right.calculatedAtMs);
       }
 
+      function calculateActiveSlopeProjections(records, cycleStyles) {
+        const activeResetMs = [...cycleStyles.entries()].find(([, cycleStyle]) => cycleStyle.role === "Active")?.[0];
+        if (!Number.isFinite(activeResetMs)) return null;
+
+        const cycleStart = {
+          calculatedAtMs: activeResetMs - RESET_WINDOW_MS,
+          resetMs: activeResetMs,
+          remaining: 100
+        };
+        const savedPoints = records
+          .filter((item) => item.resetMs === activeResetMs && Number.isFinite(item.remaining))
+          .filter((item) => item.calculatedAtMs !== cycleStart.calculatedAtMs)
+          .sort((left, right) => left.calculatedAtMs - right.calculatedAtMs);
+        const points = [cycleStart, ...savedPoints];
+        if (points.length < 2) return null;
+
+        const latest = points[points.length - 1];
+        const averageElapsedMs = latest.calculatedAtMs - cycleStart.calculatedAtMs;
+        const averageRatePerMs = averageElapsedMs > 0
+          ? (cycleStart.remaining - latest.remaining) / averageElapsedMs
+          : 0;
+        let fastestRatePerMs = 0;
+        for (let earlierIndex = 0; earlierIndex < points.length - 1; earlierIndex += 1) {
+          for (let laterIndex = earlierIndex + 1; laterIndex < points.length; laterIndex += 1) {
+            const elapsedMs = points[laterIndex].calculatedAtMs - points[earlierIndex].calculatedAtMs;
+            if (elapsedMs <= 0) continue;
+            const ratePerMs = (points[earlierIndex].remaining - points[laterIndex].remaining) / elapsedMs;
+            if (ratePerMs > fastestRatePerMs) fastestRatePerMs = ratePerMs;
+          }
+        }
+
+        const makeProjection = (kind, label, ratePerMs) => {
+          if (!(ratePerMs > 0) || !(latest.remaining > 0)) return null;
+          return {
+            kind,
+            label,
+            ratePerMs,
+            ratePerDay: ratePerMs * DAY_MS,
+            zeroAtMs: latest.calculatedAtMs + (latest.remaining / ratePerMs)
+          };
+        };
+        const projections = [
+          makeProjection("average", "Average slope", averageRatePerMs),
+          makeProjection("fastest", "Fastest slope", fastestRatePerMs)
+        ].filter(Boolean);
+        return projections.length ? { activeResetMs, latest, projections } : null;
+      }
+
       function formatChartDay(milliseconds) {
         return new Intl.DateTimeFormat(undefined, {
           day: "numeric",
@@ -1578,6 +1647,9 @@
         const titleId = valueKey === "remaining" ? "remainingChartTitle" : "ppdChartTitle";
         const descriptionId = valueKey === "remaining" ? "remainingChartDescription" : "ppdChartDescription";
         const chartTitle = valueKey === "remaining" ? "Remaining allowance over time" : "Recommended daily pace over time";
+        const activeSlopeProjections = valueKey === "remaining"
+          ? calculateActiveSlopeProjections(records, cycleStyles)
+          : null;
 
         svg.replaceChildren();
         svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
@@ -1700,6 +1772,7 @@
         });
         const oldCyclesLayer = createSvgElement("g", { "data-chart-layer": "old-cycles" });
         const activeConnectionsLayer = createSvgElement("g", { "data-chart-layer": "active-connections" });
+        const projectionLayer = createSvgElement("g", { "data-chart-layer": "active-projections" });
         const activeMarkersLayer = createSvgElement("g", { "data-chart-layer": "active-markers" });
         orderedGroups.forEach(([resetMs, group]) => {
           group.sort((left, right) => left.calculatedAtMs - right.calculatedAtMs);
@@ -1745,7 +1818,24 @@
             oldCyclesLayer.append(connectionLayer, markerLayer);
           }
         });
-        svg.append(oldCyclesLayer, activeConnectionsLayer, activeMarkersLayer);
+        if (activeSlopeProjections) {
+          activeSlopeProjections.projections.forEach((projection) => {
+            const displayEndMs = Math.min(projection.zeroAtMs, activeSlopeProjections.activeResetMs);
+            const displayEndRemaining = Math.max(0, activeSlopeProjections.latest.remaining
+              - projection.ratePerMs * (displayEndMs - activeSlopeProjections.latest.calculatedAtMs));
+            const projectionLine = createSvgElement("line", {
+              class: `chart-projection-line${projection.kind === "fastest" ? " is-fastest" : ""}`,
+              x1: x(activeSlopeProjections.latest),
+              y1: y(activeSlopeProjections.latest.remaining),
+              x2: x({ calculatedAtMs: displayEndMs, resetMs: activeSlopeProjections.activeResetMs }),
+              y2: y(displayEndRemaining),
+              style: `stroke: ${PROJECTION_COLOR}`
+            });
+            projectionLine.append(createSvgElement("title", {}, `${projection.label}: ${formatNumber(projection.ratePerDay, 4)} percentage points per day, reaching 0% at ${formatLocalDateWithSeconds(projection.zeroAtMs)}.`));
+            projectionLayer.append(projectionLine);
+          });
+        }
+        svg.append(oldCyclesLayer, activeConnectionsLayer, projectionLayer, activeMarkersLayer);
 
         svg.append(
           createSvgElement("text", {
@@ -1773,6 +1863,7 @@
         const resetCycles = [...new Set(history.map((item) => item.resetMs))];
         const chartRecords = addInferredCycleStarts(records, resetCycles);
         const cycleStyles = buildCycleStyles(resetCycles);
+        const activeSlopeProjections = calculateActiveSlopeProjections(chartRecords, cycleStyles);
         const hasChartRecords = chartRecords.length > 0;
         chartEmpty.hidden = hasChartRecords;
         chartGrid.hidden = !hasChartRecords;
@@ -1804,6 +1895,16 @@
           swatch.style.setProperty("--cycle-color", OLD_CYCLE_COLOR);
           item.append(swatch, "Old cycles");
           chartLegend.append(item);
+        }
+        if (activeSlopeProjections) {
+          activeSlopeProjections.projections.forEach((projection) => {
+            const item = document.createElement("span");
+            item.className = "chart-legend-item";
+            const swatch = document.createElement("span");
+            swatch.className = `chart-legend-swatch is-projection${projection.kind === "fastest" ? " is-fastest-projection" : ""}`;
+            item.append(swatch, `${projection.label} · ${formatNumber(projection.ratePerDay, 4)} PPD`);
+            chartLegend.append(item);
+          });
         }
         if (!hasChartRecords) {
           remainingChart.replaceChildren();
