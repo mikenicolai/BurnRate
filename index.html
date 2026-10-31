@@ -656,8 +656,10 @@
 
     .history-chart .chart-projection-average-line {
       stroke: #ed985f;
+      stroke-opacity: 0.36;
       stroke-linecap: round;
       stroke-width: 2;
+      transition: stroke-opacity 120ms ease;
     }
 
     .history-chart .chart-projection-average-hit {
@@ -675,6 +677,12 @@
     .history-chart .chart-projection-area:focus .chart-projection-band,
     .history-chart .chart-projection-area.is-open .chart-projection-band {
       fill-opacity: 0.5;
+    }
+
+    .history-chart .chart-projection-area:hover .chart-projection-average-line,
+    .history-chart .chart-projection-area:focus .chart-projection-average-line,
+    .history-chart .chart-projection-area.is-open .chart-projection-average-line {
+      stroke-opacity: 0.5;
     }
 
     .history-chart .chart-projection-tooltip {
