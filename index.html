@@ -666,21 +666,61 @@
       pointer-events: none;
     }
 
+    .history-chart .chart-projection-endpoint-group {
+      cursor: pointer;
+      outline: none;
+    }
+
     .history-chart .chart-projection-endpoint {
       fill: var(--surface-strong);
       stroke: #e7a27a;
       stroke-width: 2;
-      cursor: help;
     }
 
     .history-chart .chart-projection-endpoint.is-fastest {
       fill: #f9e1d3;
     }
 
-    .history-chart .chart-projection-endpoint:focus-visible {
-      outline: none;
+    .history-chart .chart-projection-endpoint-group:focus .chart-projection-endpoint {
       stroke: #c96f40;
       stroke-width: 3;
+    }
+
+    .history-chart .chart-projection-tooltip {
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 120ms ease;
+    }
+
+    .history-chart .chart-projection-endpoint-group:hover .chart-projection-tooltip,
+    .history-chart .chart-projection-endpoint-group:focus .chart-projection-tooltip,
+    .history-chart .chart-projection-endpoint-group.is-open .chart-projection-tooltip {
+      opacity: 1;
+    }
+
+    .history-chart .chart-projection-tooltip-box {
+      fill: #24312d;
+      fill-opacity: 0.96;
+      stroke: #f3c4aa;
+      stroke-width: 1;
+    }
+
+    .history-chart .chart-projection-tooltip-title,
+    .history-chart .chart-projection-tooltip-time {
+      fill: #ffffff;
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      pointer-events: none;
+    }
+
+    .history-chart .chart-projection-tooltip-title {
+      font-size: 10px;
+      font-weight: 750;
+    }
+
+    .history-chart .chart-projection-tooltip-time {
+      fill: #f9e1d3;
+      font-size: 10px;
+      font-weight: 600;
     }
 
     .history-chart.ppd-chart .chart-point {
@@ -1873,17 +1913,61 @@
             projectionLayer.append(projectionLine);
             if (projection.zeroAtMs <= activeSlopeProjections.activeResetMs) {
               const endpointLabel = `${projection.label} reaches 0% at ${formatLocalDateWithSeconds(projection.zeroAtMs)}`;
-              const endpoint = createSvgElement("circle", {
-                class: `chart-projection-endpoint${projection.kind === "fastest" ? " is-fastest" : ""}`,
-                cx: x({ calculatedAtMs: projection.zeroAtMs, resetMs: activeSlopeProjections.activeResetMs }),
-                cy: y(0),
-                r: 4.5,
+              const endpointX = x({ calculatedAtMs: projection.zeroAtMs, resetMs: activeSlopeProjections.activeResetMs });
+              const endpointY = y(0);
+              const tooltipWidth = 218;
+              const tooltipHeight = 44;
+              const tooltipX = Math.max(margin.left + 4, Math.min(endpointX - tooltipWidth / 2, width - margin.right - tooltipWidth - 4));
+              const tooltipY = Math.max(margin.top + 4, endpointY - tooltipHeight - 13);
+              const endpointGroup = createSvgElement("g", {
+                class: "chart-projection-endpoint-group",
                 tabindex: 0,
-                role: "img",
+                role: "button",
                 "aria-label": endpointLabel
               });
-              endpoint.append(createSvgElement("title", {}, endpointLabel));
-              projectionLayer.append(endpoint);
+              const endpoint = createSvgElement("circle", {
+                class: `chart-projection-endpoint${projection.kind === "fastest" ? " is-fastest" : ""}`,
+                cx: endpointX,
+                cy: endpointY,
+                r: 4.5
+              });
+              const tooltip = createSvgElement("g", {
+                class: "chart-projection-tooltip",
+                "aria-hidden": "true"
+              });
+              tooltip.append(
+                createSvgElement("rect", {
+                  class: "chart-projection-tooltip-box",
+                  x: tooltipX,
+                  y: tooltipY,
+                  width: tooltipWidth,
+                  height: tooltipHeight,
+                  rx: 7
+                }),
+                createSvgElement("text", {
+                  class: "chart-projection-tooltip-title",
+                  x: tooltipX + 10,
+                  y: tooltipY + 17
+                }, `${projection.label} zero estimate`),
+                createSvgElement("text", {
+                  class: "chart-projection-tooltip-time",
+                  x: tooltipX + 10,
+                  y: tooltipY + 34
+                }, formatLocalDateWithSeconds(projection.zeroAtMs))
+              );
+              endpointGroup.append(endpoint, tooltip);
+              endpointGroup.addEventListener("click", (event) => {
+                event.stopPropagation();
+                endpointGroup.classList.add("is-open");
+                endpointGroup.focus();
+              });
+              endpointGroup.addEventListener("keydown", (event) => {
+                if (event.key !== "Enter" && event.key !== " ") return;
+                event.preventDefault();
+                endpointGroup.classList.add("is-open");
+              });
+              endpointGroup.addEventListener("blur", () => endpointGroup.classList.remove("is-open"));
+              projectionLayer.append(endpointGroup);
             }
           });
         }
