@@ -1911,6 +1911,19 @@
             const fastestY = y(fastestProjection.displayEndRemaining);
             const averageX = x({ calculatedAtMs: averageProjection.displayEndMs, resetMs: activeSlopeProjections.activeResetMs });
             const averageY = y(averageProjection.displayEndRemaining);
+            const projectionBandPoints = [
+              `${latestX},${latestY}`,
+              `${fastestX},${fastestY}`
+            ];
+            if (fastestProjection.displayEndRemaining === 0
+              && averageProjection.displayEndMs > fastestProjection.displayEndMs) {
+              const floorX = x({
+                calculatedAtMs: averageProjection.displayEndMs,
+                resetMs: activeSlopeProjections.activeResetMs
+              });
+              projectionBandPoints.push(`${floorX},${y(0)}`);
+            }
+            projectionBandPoints.push(`${averageX},${averageY}`);
             const areaLabel = `Max rate ${formatNumber(fastestProjection.ratePerDay, 4)} PPD reaches 0% at ${formatLocalDateWithSeconds(fastestProjection.zeroAtMs)}. Average rate ${formatNumber(averageProjection.ratePerDay, 4)} PPD reaches 0% at ${formatLocalDateWithSeconds(averageProjection.zeroAtMs)}.`;
             const projectionArea = createSvgElement("g", {
               class: "chart-projection-area",
@@ -1920,11 +1933,7 @@
             });
             const projectionBand = createSvgElement("polygon", {
               class: "chart-projection-band",
-              points: [
-                `${latestX},${latestY}`,
-                `${fastestX},${fastestY}`,
-                `${averageX},${averageY}`
-              ].join(" ")
+              points: projectionBandPoints.join(" ")
             });
             const averageLineHit = createSvgElement("line", {
               class: "chart-projection-average-hit",
